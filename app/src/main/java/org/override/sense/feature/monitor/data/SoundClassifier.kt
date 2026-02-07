@@ -25,8 +25,8 @@ class SoundClassifier(
         // 20 -> Baby cry
         // 349, 350, 353 -> Doorbell, Knock
         
-        private val CRITICAL_INDICES = setOf(394, 390, 391, 317, 318, 319)
-        private val WARNING_INDICES = setOf(349, 350, 353, 392, 393)
+        private val CRITICAL_INDICES = setOf(394, 390, 391, 317, 318, 319, 393, 382) // Added 393 (Smoke), 382 (Alarm)
+        private val WARNING_INDICES = setOf(349, 350, 353, 392)
         private val INFO_INDICES = setOf(20, 19, 14) // Baby cry, Crying, Baby laughter
     }
 
@@ -89,18 +89,18 @@ class SoundClassifier(
         // Find top scores or specific interesting categories
         for (i in scores.indices) {
             val score = scores[i]
-            // Lower threshold to capture everything during debug
-            if (score > 0.1f) { 
+            if (score > 0.3f) { // Lowered threshold to 0.3f
                 val category = getCategoryForIndex(i)
-                // Map everything for now to see what's happening, even if null category
-                results.add(
-                    ClassificationResult(
-                        label = getLabelForIndex(i),
-                        score = score,
-                        category = category ?: SoundCategory.INFO, // Default to INFO if unknown for debug
-                        index = i
+                if (category != null) {
+                    results.add(
+                        ClassificationResult(
+                            label = getLabelForIndex(i),
+                            score = score,
+                            category = category,
+                            index = i
+                        )
                     )
-                )
+                }
             }
         }
 

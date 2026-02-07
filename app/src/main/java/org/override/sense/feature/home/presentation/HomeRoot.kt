@@ -75,20 +75,6 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
-                actions = {
-                    FilledIconButton(
-                        onClick = { onAction(HomeAction.ToggleMonitoring) },
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = if (state.isMonitoringActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                            contentColor = if (state.isMonitoringActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PowerSettingsNew,
-                            contentDescription = "Toggle Monitoring"
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors()
             )
         },

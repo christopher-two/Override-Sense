@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import org.override.sense.core.common.feedback.VibrationManager
 import org.override.sense.core.common.logging.Logger
 import org.override.sense.feature.monitor.domain.MonitorRepository
 import org.override.sense.feature.monitor.domain.SoundEvent
@@ -16,14 +17,15 @@ import java.util.UUID
 class RealMonitorRepository(
     private val audioRecorder: AudioRecorder,
     private val soundClassifier: SoundClassifier,
+    private val vibrationManager: VibrationManager,
     private val logger: Logger
 ) : MonitorRepository {
 
     private val _isScanning = MutableStateFlow(false)
     override val isScanning: Flow<Boolean> = _isScanning
 
-    private val _detectedSounds = MutableSharedFlow<SoundEvent>(replay = 0)
-    override val detectedSounds: Flow<SoundEvent> = _detectedSounds
+    private val _detectedSounds = MutableStateFlow<SoundEvent?>(null)
+    override val detectedSounds: Flow<SoundEvent?> = _detectedSounds
 
     private val _history = MutableStateFlow<List<SoundEvent>>(emptyList())
     override val recentHistory: Flow<List<SoundEvent>> = _history
@@ -48,19 +50,10 @@ class RealMonitorRepository(
             audioRecorder.startRecording().collect { audioData ->
                 val results = soundClassifier.classify(audioData)
                 
-                    // Log all results for debugging
-                    if (results.isNotEmpty()) {
-                        val top = results.first()
-                        logger.d("MonitorRepository", "Top classification: ${top.label} (${top.score})")
-                    } else {
-                        logger.d("MonitorRepository", "No classification results")
-                    }
-
                     if (results.isNotEmpty()) {
                         val bestMatch = results.first()
                         
-                        // Lowered threshold for testing and added logging
-                        if (bestMatch.score > 0.3f) { 
+                        if (bestMatch.score > 0.3f) { // Lowered to match classifier
                             val event = SoundEvent(
                                 id = UUID.randomUUID().toString(),
                                 name = bestMatch.label,
@@ -70,7 +63,11 @@ class RealMonitorRepository(
                             )
                             
                             logger.i("MonitorRepository", "Sound detected: ${event.name} (${event.confidence})")
-                            _detectedSounds.emit(event)
+                            
+                            // Trigger Haptic Feedback
+                            vibrationManager.vibrate(event.category)
+                            
+                            _detectedSounds.value = event
                             updateHistory(event)
                         }
                     }

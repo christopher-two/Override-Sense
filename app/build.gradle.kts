@@ -134,9 +134,9 @@ dependencies {
     implementation(libs.androidx.material3.adaptive.navigation3)
 
     // TensorFlowLite
-    implementation(libs.tasks.genai)
     implementation(libs.tensorflow.lite.support) {
         exclude(group = "org.tensorflow", module = "tensorflow-lite-support-api")
+        exclude(group = "com.google.ai.edge.litert", module = "litert-support-api")
     }
     implementation(libs.tensorflow.lite.metadata)
     implementation(libs.tensorflow.lite) {

@@ -2,6 +2,8 @@ package org.override.sense.core.common.di
 
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
+import org.override.sense.core.common.feedback.SystemVibrationManager
+import org.override.sense.core.common.feedback.VibrationManager
 import org.override.sense.core.common.logging.Logger
 import org.override.sense.core.common.logging.TimberLogger
 import org.override.sense.core.common.network.ConnectivityManagerNetworkMonitor
@@ -11,4 +13,5 @@ val CoreCommonModule
     get() = module {
         single<Logger> { TimberLogger() }
         single<NetworkMonitor> { ConnectivityManagerNetworkMonitor(androidContext(), get()) }
+        single<VibrationManager> { SystemVibrationManager(androidContext()) }
     }
