@@ -48,6 +48,10 @@ class FakeMonitorRepository : MonitorRepository {
         _isScanning.value = isScanning
     }
 
+    override fun emitEvent(event: SoundEvent) {
+        TODO("Not yet implemented")
+    }
+
     private fun generateRandomEvent(): SoundEvent {
         val type = Random.nextInt(0, 4)
         return when (type) {

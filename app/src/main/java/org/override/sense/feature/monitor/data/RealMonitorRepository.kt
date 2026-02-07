@@ -18,6 +18,7 @@ import java.util.UUID
 
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -26,6 +27,10 @@ class RealMonitorRepository(
     private val logger: Logger,
     private val settingsRepository: SettingsRepository
 ) : MonitorRepository {
+
+    // Scope for repository operations that should outlive function calls but be cancellable if needed
+    // Usually repositories are singletons so this lives as long as the app
+    private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val _isScanning = MutableStateFlow(false)
     override val isScanning: Flow<Boolean> = _isScanning
@@ -45,8 +50,7 @@ class RealMonitorRepository(
 
     init {
         // Restore state on init
-        val scope = CoroutineScope(Dispatchers.IO)
-        scope.launch {
+        repositoryScope.launch {
             context.dataStore.data.map { it[IS_SCANNING_KEY] ?: false }
                 .collect { savedIsScanning ->
                     _isScanning.value = savedIsScanning
@@ -59,7 +63,7 @@ class RealMonitorRepository(
         }
         
         // Observe settings changes and restart worker if needed
-        scope.launch {
+        repositoryScope.launch {
             var previousSettings = settingsRepository.getSettings().first().monitorSettings
             settingsRepository.getSettings().collect { userSettings ->
                 val currentSettings = userSettings.monitorSettings
@@ -98,8 +102,7 @@ class RealMonitorRepository(
 
     private fun startWork() {
         // Get current settings to apply battery constraints
-        val scope = CoroutineScope(Dispatchers.IO)
-        scope.launch {
+        repositoryScope.launch {
             val settings = settingsRepository.getSettings().first().monitorSettings
             
             // Build constraints based on battery settings
@@ -140,10 +143,15 @@ class RealMonitorRepository(
         workManager.cancelUniqueWork("monitor_worker")
     }
 
-    // Called by Worker
-    fun emitEventFromWorker(event: SoundEvent) {
+    // Called by Worker via Interface
+    override fun emitEvent(event: SoundEvent) {
         _detectedSounds.value = event
         updateHistory(event)
+    }
+
+    // Deprecated: kept for compatibility if needed, but worker should use emitEvent
+    fun emitEventFromWorker(event: SoundEvent) {
+        emitEvent(event)
     }
 
     private fun updateHistory(event: SoundEvent) {

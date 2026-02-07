@@ -90,7 +90,8 @@ class MonitorWorker(
                         notificationManager.showEventNotification(event, monitorSettings)
                         
                         // 3. Update Repository (so UI sees it)
-                        (repository as? RealMonitorRepository)?.emitEventFromWorker(event)
+                        // Use interface method instead of casting
+                        repository.emitEvent(event)
                     }
                 }
             }

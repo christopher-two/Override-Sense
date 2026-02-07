@@ -16,7 +16,7 @@ data class ClassificationResult(
 
 class SoundClassifier(
     private val context: Context
-) {
+) : AutoCloseable {
     companion object {
         private const val MODEL_FILENAME = "1.tflite"
         // Based on the CSV we fetched:
@@ -35,6 +35,11 @@ class SoundClassifier(
 
     init {
         setup()
+    }
+    
+    override fun close() {
+        interpreter?.close()
+        interpreter = null
     }
 
     private fun setup() {
