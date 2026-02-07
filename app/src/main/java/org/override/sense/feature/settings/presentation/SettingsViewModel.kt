@@ -30,6 +30,7 @@ class SettingsViewModel(
                     it.copy(
                         theme = settings.theme,
                         color = settings.color,
+                        monitorSettings = settings.monitorSettings,
                         isLoading = false
                     )
                 }
@@ -40,8 +41,39 @@ class SettingsViewModel(
     fun onAction(action: SettingsAction) {
         viewModelScope.launch {
             when (action) {
+                // UI Settings
                 is SettingsAction.UpdateTheme -> useCases.updateTheme(action.theme)
                 is SettingsAction.UpdateColor -> useCases.updateColor(action.color)
+                
+                // Detection Settings
+                is SettingsAction.UpdateSensitivity -> useCases.updateSensitivity(action.sensitivity)
+                
+                // Notification Settings
+                is SettingsAction.UpdateNotificationPriority -> useCases.updateNotificationPriority(action.priority)
+                is SettingsAction.UpdateShowConfidence -> useCases.updateShowConfidence(action.show)
+                is SettingsAction.UpdateBypassDoNotDisturb -> useCases.updateBypassDoNotDisturb(action.bypass)
+                is SettingsAction.UpdateShowOnLockScreen -> useCases.updateShowOnLockScreen(action.show)
+                is SettingsAction.UpdateEnableNotificationLights -> useCases.updateEnableNotificationLights(action.enable)
+                
+                // Vibration Settings
+                is SettingsAction.UpdateVibrationPattern -> useCases.updateVibrationPattern(action.pattern)
+                is SettingsAction.UpdateVibrationEnabled -> useCases.updateVibrationEnabled(action.enabled)
+                is SettingsAction.UpdateVibrationIntensity -> useCases.updateVibrationIntensity(action.intensity)
+                
+                // Audio Settings
+                is SettingsAction.UpdateMicrophoneSensitivity -> useCases.updateMicrophoneSensitivity(action.sensitivity)
+                is SettingsAction.UpdateNoiseReduction -> useCases.updateNoiseReduction(action.enable)
+                is SettingsAction.UpdateMinAmplitudeThreshold -> useCases.updateMinAmplitudeThreshold(action.threshold)
+                
+                // Alert Settings
+                is SettingsAction.UpdatePlaySound -> useCases.updatePlaySound(action.play)
+                is SettingsAction.UpdateSoundVolume -> useCases.updateSoundVolume(action.volume)
+                is SettingsAction.UpdateOnlyAlertOnce -> useCases.updateOnlyAlertOnce(action.once)
+                
+                // Battery Settings
+                is SettingsAction.UpdateBatteryOptimization -> useCases.updateBatteryOptimization(action.enable)
+                is SettingsAction.UpdateWorkOnlyWhenCharging -> useCases.updateWorkOnlyWhenCharging(action.enable)
+                
                 SettingsAction.ClearData -> useCases.clearData()
             }
         }

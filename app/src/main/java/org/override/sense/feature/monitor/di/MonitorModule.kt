@@ -21,7 +21,7 @@ val MonitorModule = module {
     single { SoundClassifier(androidContext()) }
     single<AppNotificationManager> { SystemAppNotificationManager(androidContext()) }
     
-    single<MonitorRepository> { RealMonitorRepository(androidContext(), get()) }
+    single<MonitorRepository> { RealMonitorRepository(androidContext(), get(), get()) }
     
     // ViewModel
     viewModelOf(::MonitorViewModel)

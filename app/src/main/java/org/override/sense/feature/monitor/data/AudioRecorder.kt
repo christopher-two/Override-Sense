@@ -30,7 +30,10 @@ class AudioRecorder(
     private var audioRecord: AudioRecord? = null
 
     @SuppressLint("MissingPermission") // Permission checked by caller/UI
-    fun startRecording(): Flow<FloatArray> = flow {
+    fun startRecording(
+        microphoneSensitivity: Float = 1.0f,
+        minAmplitudeThreshold: Int = 100
+    ): Flow<FloatArray> = flow {
         // Ensure we're not already recording
         if (isRecording.getAndSet(true)) {
             logger.w("AudioRecorder", "Recording already in progress, skipping new start")
@@ -58,7 +61,7 @@ class AudioRecorder(
 
         try {
             recorder.startRecording()
-            logger.d("AudioRecorder", "Recording started")
+            logger.d("AudioRecorder", "Recording started with sensitivity: $microphoneSensitivity, threshold: $minAmplitudeThreshold")
 
             val buffer = ShortArray(MODEL_INPUT_SIZE)
 
@@ -72,14 +75,19 @@ class AudioRecorder(
                         val abs = kotlin.math.abs(buffer[i].toInt())
                         if (abs > maxAmplitude) maxAmplitude = abs
                     }
-                    if (maxAmplitude < 100) {
+                    
+                    if (maxAmplitude < minAmplitudeThreshold) {
                         logger.d("AudioRecorder", "Low amplitude (Silence?): $maxAmplitude")
+                        // Skip processing if below threshold
+                        continue
                     }
 
                     // Convert ShortArray to FloatArray normalized to [-1.0, 1.0]
+                    // Apply microphone sensitivity as gain
                     val floatBuffer = FloatArray(readResult)
                     for (i in 0 until readResult) {
-                        floatBuffer[i] = buffer[i] / 32768f
+                        val normalizedValue = buffer[i] / 32768f
+                        floatBuffer[i] = (normalizedValue * microphoneSensitivity).coerceIn(-1.0f, 1.0f)
                     }
                     emit(floatBuffer)
                 } else {

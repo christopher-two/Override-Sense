@@ -7,9 +7,14 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import org.override.sense.feature.monitor.domain.SoundCategory
+import org.override.sense.feature.settings.domain.VibrationPattern
 
 interface VibrationManager {
-    fun vibrate(category: SoundCategory)
+    fun vibrate(
+        category: SoundCategory,
+        pattern: VibrationPattern = VibrationPattern.DOUBLE,
+        intensity: Float = 1.0f
+    )
     fun cancel()
 }
 
@@ -28,21 +33,23 @@ class SystemVibrationManager(
         }
     }
 
-    override fun vibrate(category: SoundCategory) {
+    override fun vibrate(
+        category: SoundCategory,
+        pattern: VibrationPattern,
+        intensity: Float
+    ) {
+        // Don't vibrate if pattern is NONE
+        if (pattern == VibrationPattern.NONE) return
+        
         // Only vibrate if the device has a vibrator
         if (!vibrator.hasVibrator()) return
 
         // Cancel any ongoing vibration first
         vibrator.cancel()
 
-        val effect = when (category) {
-            SoundCategory.CRITICAL -> createCriticalVibration()
-            SoundCategory.WARNING -> createWarningVibration()
-            SoundCategory.INFO -> createInfoVibration()
-        }
+        val effect = createVibrationEffect(pattern, intensity)
 
         // Use AudioAttributes to ensure vibration is treated as an alarm or notification
-        // This is important for bypassing some DND settings or ensuring visibility
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val attributes = AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -64,46 +71,55 @@ class SystemVibrationManager(
         vibrator.cancel()
     }
 
-    private fun createCriticalVibration(): VibrationEffect {
-        // Urgent: Long, intense, repetitive
-        // Pattern: 0ms delay, 1000ms vibration, 200ms pause, repeat.
-        // Amplitudes: High
+    private fun createVibrationEffect(pattern: VibrationPattern, intensity: Float): VibrationEffect {
+        // Clamp intensity between 0.0 and 1.0
+        val clampedIntensity = intensity.coerceIn(0.0f, 1.0f)
+        
+        // Convert to amplitude (1-255)
+        val amplitude = (clampedIntensity * 255).toInt().coerceIn(1, 255)
+        
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val timings = longArrayOf(0, 500, 100, 500, 100, 1000)
-            val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255)
-            VibrationEffect.createWaveform(
-                timings,
-                amplitudes,
-                -1
-            ) // -1 for no repeat (just one sequence) or 0 to repeat
+            when (pattern) {
+                VibrationPattern.NONE -> {
+                    VibrationEffect.createOneShot(0, 0)
+                }
+                VibrationPattern.SHORT -> {
+                    VibrationEffect.createOneShot(200, amplitude)
+                }
+                VibrationPattern.MEDIUM -> {
+                    VibrationEffect.createOneShot(500, amplitude)
+                }
+                VibrationPattern.LONG -> {
+                    VibrationEffect.createOneShot(1000, amplitude)
+                }
+                VibrationPattern.DOUBLE -> {
+                    val timings = longArrayOf(0, 500, 200, 500)
+                    val amplitudes = intArrayOf(0, amplitude, 0, amplitude)
+                    VibrationEffect.createWaveform(timings, amplitudes, -1)
+                }
+                VibrationPattern.TRIPLE -> {
+                    val timings = longArrayOf(0, 200, 150, 200, 150, 200)
+                    val amplitudes = intArrayOf(0, amplitude, 0, amplitude, 0, amplitude)
+                    VibrationEffect.createWaveform(timings, amplitudes, -1)
+                }
+                VibrationPattern.PULSING -> {
+                    val timings = longArrayOf(0, 200, 100, 300, 100, 200, 100, 300)
+                    val amplitudes = intArrayOf(0, amplitude, 0, amplitude, 0, amplitude, 0, amplitude)
+                    VibrationEffect.createWaveform(timings, amplitudes, -1)
+                }
+            }
         } else {
+            // Fallback for older devices
             @Suppress("DEPRECATION")
-            VibrationEffect.createOneShot(1000, VibrationEffect.DEFAULT_AMPLITUDE)
-        }
-    }
-
-    private fun createWarningVibration(): VibrationEffect {
-        // Warning: Short, intermittent (double pulse)
-        // Pattern: 0ms delay, 200ms vib, 100ms pause, 200ms vib
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val timings = longArrayOf(0, 200, 100, 200)
-            val amplitudes = intArrayOf(0, 200, 0, 200)
-            VibrationEffect.createWaveform(timings, amplitudes, -1)
-        } else {
-            @Suppress("DEPRECATION")
-            VibrationEffect.createWaveform(longArrayOf(0, 200, 100, 200), -1)
-        }
-    }
-
-    private fun createInfoVibration(): VibrationEffect {
-        // Info: Subtle, short
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            VibrationEffect.createOneShot(50, 50)
-        } else {
-            @Suppress("DEPRECATION")
-            VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
+            when (pattern) {
+                VibrationPattern.NONE -> VibrationEffect.createOneShot(0, 0)
+                VibrationPattern.SHORT -> VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE)
+                VibrationPattern.MEDIUM -> VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE)
+                VibrationPattern.LONG -> VibrationEffect.createOneShot(1000, VibrationEffect.DEFAULT_AMPLITUDE)
+                VibrationPattern.DOUBLE -> VibrationEffect.createWaveform(longArrayOf(0, 500, 200, 500), -1)
+                VibrationPattern.TRIPLE -> VibrationEffect.createWaveform(longArrayOf(0, 200, 150, 200, 150, 200), -1)
+                VibrationPattern.PULSING -> VibrationEffect.createWaveform(longArrayOf(0, 200, 100, 300, 100, 200, 100, 300), -1)
+            }
         }
     }
 }

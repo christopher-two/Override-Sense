@@ -12,11 +12,12 @@ import org.override.sense.MainActivity
 import org.override.sense.R
 import org.override.sense.feature.monitor.domain.SoundCategory
 import org.override.sense.feature.monitor.domain.SoundEvent
+import org.override.sense.feature.settings.domain.MonitorSettings
 
 interface AppNotificationManager {
     fun createNotificationChannels()
     fun getForegroundNotification(): Notification
-    fun showEventNotification(event: SoundEvent)
+    fun showEventNotification(event: SoundEvent, settings: MonitorSettings)
 }
 
 class SystemAppNotificationManager(
@@ -47,8 +48,12 @@ class SystemAppNotificationManager(
                 "Sound Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications for detected sounds"
+                description = "Critical sound detection alerts"
                 enableVibration(true)
+                enableLights(true)
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true) // Bypass Do Not Disturb for critical alerts
             }
 
             notificationManager.createNotificationChannel(foregroundChannel)
@@ -74,7 +79,7 @@ class SystemAppNotificationManager(
             .build()
     }
 
-    override fun showEventNotification(event: SoundEvent) {
+    override fun showEventNotification(event: SoundEvent, settings: MonitorSettings) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -83,22 +88,87 @@ class SystemAppNotificationManager(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val title = when (event.category) {
-            SoundCategory.CRITICAL -> "CRITICAL ALERT"
-            SoundCategory.WARNING -> "Warning"
-            SoundCategory.INFO -> "Info"
+        // Build title with optional confidence
+        val baseTitle = when (event.category) {
+            SoundCategory.CRITICAL -> "🚨 ${event.name}"
+            SoundCategory.WARNING -> "⚠️ ${event.name}"
+            SoundCategory.INFO -> "ℹ️ ${event.name}"
+        }
+        
+        val title = if (settings.showConfidence) {
+            "$baseTitle (${(event.confidence * 100).toInt()}%)"
+        } else {
+            baseTitle
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
+        // Map settings priority to notification priority
+        val priority = when (settings.notificationPriority) {
+            org.override.sense.feature.settings.domain.NotificationPriority.LOW -> NotificationCompat.PRIORITY_LOW
+            org.override.sense.feature.settings.domain.NotificationPriority.DEFAULT -> NotificationCompat.PRIORITY_DEFAULT
+            org.override.sense.feature.settings.domain.NotificationPriority.HIGH -> NotificationCompat.PRIORITY_HIGH
+            org.override.sense.feature.settings.domain.NotificationPriority.MAX -> NotificationCompat.PRIORITY_MAX
+        }
+
+        // Map settings visibility
+        val visibility = if (settings.showOnLockScreen) {
+            NotificationCompat.VISIBILITY_PUBLIC
+        } else {
+            NotificationCompat.VISIBILITY_PRIVATE
+        }
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("$title: ${event.name}")
-            .setContentText("Confidence: ${(event.confidence * 100).toInt()}%")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentTitle(title)
+            .setPriority(priority)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(visibility)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .build()
+            .setOnlyAlertOnce(settings.onlyAlertOnce)
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText(title)
+                .setBigContentTitle(title))
 
+        // Apply vibration pattern if enabled
+        if (settings.vibrationEnabled) {
+            val pattern = getVibrationPattern(settings.vibrationPattern, settings.vibrationIntensity)
+            builder.setVibrate(pattern)
+        }
+
+        // Apply LED lights if enabled
+        if (settings.enableNotificationLights) {
+            builder.setLights(0xFFFF0000.toInt(), 1000, 1000) // Red light blinking
+        }
+
+        // Apply sound settings
+        if (!settings.playSound) {
+            builder.setSilent(true)
+        }
+
+        val notification = builder.build()
         notificationManager.notify(NOTIFICATION_ID_ALERT_BASE + event.hashCode(), notification)
+    }
+
+    private fun getVibrationPattern(
+        pattern: org.override.sense.feature.settings.domain.VibrationPattern,
+        intensity: Float
+    ): LongArray {
+        val shortDuration = (200 * intensity).toLong()
+        val mediumDuration = (500 * intensity).toLong()
+        val longDuration = (1000 * intensity).toLong()
+        val pause = 200L
+
+        return when (pattern) {
+            org.override.sense.feature.settings.domain.VibrationPattern.NONE -> longArrayOf(0)
+            org.override.sense.feature.settings.domain.VibrationPattern.SHORT -> longArrayOf(0, shortDuration)
+            org.override.sense.feature.settings.domain.VibrationPattern.MEDIUM -> longArrayOf(0, mediumDuration)
+            org.override.sense.feature.settings.domain.VibrationPattern.LONG -> longArrayOf(0, longDuration)
+            org.override.sense.feature.settings.domain.VibrationPattern.DOUBLE -> 
+                longArrayOf(0, mediumDuration, pause, mediumDuration)
+            org.override.sense.feature.settings.domain.VibrationPattern.TRIPLE -> 
+                longArrayOf(0, shortDuration, pause, shortDuration, pause, shortDuration)
+            org.override.sense.feature.settings.domain.VibrationPattern.PULSING -> 
+                longArrayOf(0, shortDuration, pause, mediumDuration, pause, shortDuration, pause, mediumDuration)
+        }
     }
 }

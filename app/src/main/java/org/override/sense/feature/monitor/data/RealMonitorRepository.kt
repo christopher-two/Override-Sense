@@ -12,6 +12,7 @@ import org.override.sense.core.common.feedback.VibrationManager
 import org.override.sense.core.common.logging.Logger
 import org.override.sense.feature.monitor.domain.MonitorRepository
 import org.override.sense.feature.monitor.domain.SoundEvent
+import org.override.sense.feature.settings.domain.SettingsRepository
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -21,7 +22,8 @@ import kotlinx.coroutines.flow.map
 
 class RealMonitorRepository(
     private val context: Context,
-    private val logger: Logger
+    private val logger: Logger,
+    private val settingsRepository: SettingsRepository
 ) : MonitorRepository {
 
     private val _isScanning = MutableStateFlow(false)
@@ -54,6 +56,36 @@ class RealMonitorRepository(
                     }
                 }
         }
+        
+        // Observe settings changes and restart worker if needed
+        scope.launch {
+            var previousSettings = settingsRepository.getSettings().first().monitorSettings
+            settingsRepository.getSettings().collect { userSettings ->
+                val currentSettings = userSettings.monitorSettings
+                
+                // Check if we need to restart the worker due to significant settings changes
+                val needsRestart = _isScanning.value && (
+                    // Detection settings
+                    previousSettings.sensitivity != currentSettings.sensitivity ||
+                    previousSettings.microphoneSensitivity != currentSettings.microphoneSensitivity ||
+                    previousSettings.minAmplitudeThreshold != currentSettings.minAmplitudeThreshold ||
+                    previousSettings.noiseReduction != currentSettings.noiseReduction ||
+                    // Battery settings (affects WorkManager constraints)
+                    previousSettings.batteryOptimization != currentSettings.batteryOptimization ||
+                    previousSettings.workOnlyWhenCharging != currentSettings.workOnlyWhenCharging
+                )
+                
+                if (needsRestart) {
+                    logger.d("RealMonitorRepository", "Settings changed, restarting worker")
+                    stopWork()
+                    // Small delay to ensure worker is stopped
+                    kotlinx.coroutines.delay(500)
+                    startWork()
+                }
+                
+                previousSettings = currentSettings
+            }
+        }
     }
 
     override suspend fun setScanning(isScanning: Boolean) {
@@ -64,26 +96,43 @@ class RealMonitorRepository(
     }
 
     private fun startWork() {
-        // For continuous background monitoring, we use a long-running expedited worker
-        // with setExpedited to run as a foreground service
-        val constraints = androidx.work.Constraints.Builder()
-            .setRequiresBatteryNotLow(false) // Allow even on low battery
-            .build()
+        // Get current settings to apply battery constraints
+        val scope = CoroutineScope(Dispatchers.IO)
+        scope.launch {
+            val settings = settingsRepository.getSettings().first().monitorSettings
             
-        val request = androidx.work.OneTimeWorkRequestBuilder<org.override.sense.feature.monitor.work.MonitorWorker>()
-            .setConstraints(constraints)
-            .addTag("monitor_worker")
-            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            .build()
+            // Build constraints based on battery settings
+            val constraintsBuilder = androidx.work.Constraints.Builder()
             
-        // KEEP policy will not restart if already running
-        workManager.enqueueUniqueWork(
-            "monitor_worker",
-            androidx.work.ExistingWorkPolicy.KEEP,
-            request
-        )
-        
-        logger.d("RealMonitorRepository", "Started continuous monitoring work")
+            if (settings.batteryOptimization) {
+                // Only run when battery is not low
+                constraintsBuilder.setRequiresBatteryNotLow(true)
+            } else {
+                constraintsBuilder.setRequiresBatteryNotLow(false)
+            }
+            
+            if (settings.workOnlyWhenCharging) {
+                // Only run when charging
+                constraintsBuilder.setRequiresCharging(true)
+            }
+            
+            val constraints = constraintsBuilder.build()
+                
+            val request = androidx.work.OneTimeWorkRequestBuilder<org.override.sense.feature.monitor.work.MonitorWorker>()
+                .setConstraints(constraints)
+                .addTag("monitor_worker")
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+                
+            // REPLACE policy to apply new settings
+            workManager.enqueueUniqueWork(
+                "monitor_worker",
+                androidx.work.ExistingWorkPolicy.REPLACE,
+                request
+            )
+            
+            logger.d("RealMonitorRepository", "Started monitoring with battery optimization: ${settings.batteryOptimization}, charging only: ${settings.workOnlyWhenCharging}")
+        }
     }
 
     private fun stopWork() {

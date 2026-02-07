@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -19,6 +20,7 @@ import org.override.sense.feature.monitor.data.RealMonitorRepository
 import org.override.sense.feature.monitor.data.SoundClassifier
 import org.override.sense.feature.monitor.domain.MonitorRepository
 import org.override.sense.feature.monitor.domain.SoundEvent
+import org.override.sense.feature.settings.domain.SettingsRepository
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -33,6 +35,7 @@ class MonitorWorker(
     private val soundClassifier: SoundClassifier by inject()
     private val vibrationManager: VibrationManager by inject()
     private val notificationManager: AppNotificationManager by inject()
+    private val settingsRepository: SettingsRepository by inject()
     
     // We need to push events back to the repository so the UI can see them.
     // Ideally, the repository is the source of truth, and this worker is just the engine.
@@ -42,18 +45,28 @@ class MonitorWorker(
     override suspend fun doWork(): Result {
         logger.d("MonitorWorker", "Starting background monitoring work")
         
+        // Get current settings
+        val settings = settingsRepository.getSettings().first()
+        val monitorSettings = settings.monitorSettings
+        
+        logger.d("MonitorWorker", "Using sensitivity: ${monitorSettings.sensitivity}, threshold: ${monitorSettings.detectionThreshold}")
+        
         notificationManager.createNotificationChannels()
         val foregroundInfo = createForegroundInfo()
         setForeground(foregroundInfo)
 
         try {
-            audioRecorder.startRecording().collect { audioData ->
+            audioRecorder.startRecording(
+                microphoneSensitivity = monitorSettings.microphoneSensitivity,
+                minAmplitudeThreshold = monitorSettings.minAmplitudeThreshold
+            ).collect { audioData ->
                 val results = soundClassifier.classify(audioData)
                 
                 if (results.isNotEmpty()) {
                     val bestMatch = results.first()
                     
-                    if (bestMatch.score > 0.3f) {
+                    // Use configured detection threshold
+                    if (bestMatch.score > monitorSettings.detectionThreshold) {
                         val event = SoundEvent(
                             id = UUID.randomUUID().toString(),
                             name = bestMatch.label,
@@ -62,18 +75,21 @@ class MonitorWorker(
                             timestamp = LocalDateTime.now()
                         )
                         
-                        logger.i("MonitorWorker", "Sound detected: ${event.name}")
+                        logger.i("MonitorWorker", "Sound detected: ${event.name} (${(event.confidence * 100).toInt()}%)")
                         
-                        // 1. Vibrate
-                        vibrationManager.vibrate(event.category)
+                        // 1. Vibrate (if enabled) with configured pattern and intensity
+                        if (monitorSettings.vibrationEnabled) {
+                            vibrationManager.vibrate(
+                                event.category,
+                                monitorSettings.vibrationPattern,
+                                monitorSettings.vibrationIntensity
+                            )
+                        }
                         
-                        // 2. Notify
-                        notificationManager.showEventNotification(event)
+                        // 2. Notify with settings
+                        notificationManager.showEventNotification(event, monitorSettings)
                         
                         // 3. Update Repository (so UI sees it)
-                        // This is a bit of a hack if repository isn't designed for this external input,
-                        // but since RealMonitorRepository is a Singleton in Koin, we can cast it safely usually
-                        // or better, add a method to the interface `emitDetectedSound`.
                         (repository as? RealMonitorRepository)?.emitEventFromWorker(event)
                     }
                 }
