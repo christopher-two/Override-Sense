@@ -18,6 +18,7 @@ import java.util.UUID
 
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 class RealMonitorRepository(
