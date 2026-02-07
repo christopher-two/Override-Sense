@@ -52,7 +52,7 @@ fun MonitorScreen(
         
         MonitorStatus(
             isScanning = state.isScanning,
-            currentCategory = activeCategory
+            lastDetection = if (state.isScanning) state.lastDetection else null
         )
     }
 }

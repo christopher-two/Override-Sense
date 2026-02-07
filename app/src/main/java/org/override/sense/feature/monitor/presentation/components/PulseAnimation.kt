@@ -1,5 +1,6 @@
 package org.override.sense.feature.monitor.presentation.components
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,7 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,26 +28,38 @@ fun PulseAnimation(
     currentCategory: SoundCategory?,
     modifier: Modifier = Modifier
 ) {
-    if (!isScanning) return
-
     val (waveCount, baseColor) = when (currentCategory) {
         SoundCategory.CRITICAL -> 4 to MaterialTheme.colorScheme.error
         SoundCategory.WARNING -> 3 to MaterialTheme.colorScheme.tertiary
         SoundCategory.INFO -> 2 to MaterialTheme.colorScheme.primary
         null -> 1 to MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
     }
-
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        // Create multiple waves based on intensity
-        for (i in 0 until waveCount) {
-            PulseWave(
-                delay = i * (2000 / waveCount),
-                color = baseColor,
-                duration = if (currentCategory == SoundCategory.CRITICAL) 1000 else 2000
-            )
+    
+    // Animated alpha for fade out effect
+    val containerAlpha = remember { Animatable(0f) }
+    
+    LaunchedEffect(isScanning) {
+        if (isScanning) {
+            containerAlpha.animateTo(1f, animationSpec = tween(300))
+        } else {
+            containerAlpha.animateTo(0f, animationSpec = tween(600))
+        }
+    }
+    
+    if (containerAlpha.value > 0f) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
+        ) {
+            // Create multiple waves based on intensity
+            for (i in 0 until waveCount) {
+                PulseWave(
+                    delay = i * (2000 / waveCount),
+                    color = baseColor,
+                    duration = if (currentCategory == SoundCategory.CRITICAL) 1000 else 2000,
+                    containerAlpha = containerAlpha.value
+                )
+            }
         }
     }
 }
@@ -53,7 +68,8 @@ fun PulseAnimation(
 private fun PulseWave(
     delay: Int,
     color: Color,
-    duration: Int
+    duration: Int,
+    containerAlpha: Float
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -77,7 +93,7 @@ private fun PulseWave(
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         drawCircle(
-            color = color.copy(alpha = alpha),
+            color = color.copy(alpha = alpha * containerAlpha),
             radius = size.minDimension / 2 * scale,
             style = Stroke(width = 4.dp.toPx())
         )
