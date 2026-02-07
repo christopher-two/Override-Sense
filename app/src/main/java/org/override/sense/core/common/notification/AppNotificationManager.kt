@@ -71,7 +71,7 @@ class SystemAppNotificationManager(
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID_FOREGROUND)
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Use default for now, ideally a specific one
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Override Sense Active")
             .setContentText("Listening for sounds...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -117,7 +117,7 @@ class SystemAppNotificationManager(
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setPriority(priority)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
