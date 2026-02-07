@@ -27,11 +27,12 @@ class MonitorWorker(
     params: WorkerParameters
 ) : CoroutineWorker(context, params), KoinComponent {
 
-    private val audioRecorder: AudioRecorder by inject()
+    // Create dedicated instances for the worker to avoid lifecycle conflicts
+    private val logger: Logger by inject()
+    private val audioRecorder: AudioRecorder = AudioRecorder(logger) // Dedicated instance
     private val soundClassifier: SoundClassifier by inject()
     private val vibrationManager: VibrationManager by inject()
     private val notificationManager: AppNotificationManager by inject()
-    private val logger: Logger by inject()
     
     // We need to push events back to the repository so the UI can see them.
     // Ideally, the repository is the source of truth, and this worker is just the engine.
@@ -80,6 +81,10 @@ class MonitorWorker(
         } catch (e: Exception) {
             logger.e("MonitorWorker", "Error in monitor worker", e)
             return Result.failure()
+        } finally {
+            // Ensure audio recording is stopped when worker finishes or is cancelled
+            audioRecorder.stopRecording()
+            logger.d("MonitorWorker", "Background monitoring work finished, audio recording stopped")
         }
 
         return Result.success()

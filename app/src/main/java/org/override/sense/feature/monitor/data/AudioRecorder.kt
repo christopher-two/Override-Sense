@@ -26,13 +26,21 @@ class AudioRecorder(
     }
 
     private val isRecording = AtomicBoolean(false)
+    @Volatile
+    private var audioRecord: AudioRecord? = null
 
     @SuppressLint("MissingPermission") // Permission checked by caller/UI
     fun startRecording(): Flow<FloatArray> = flow {
+        // Ensure we're not already recording
+        if (isRecording.getAndSet(true)) {
+            logger.w("AudioRecorder", "Recording already in progress, skipping new start")
+            return@flow
+        }
+
         val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         val bufferSize = maxOf(minBufferSize, MODEL_INPUT_SIZE * 2) // Ensure plenty of space
 
-        val audioRecord = AudioRecord(
+        val recorder = AudioRecord(
             MediaRecorder.AudioSource.MIC,
             SAMPLE_RATE,
             CHANNEL_CONFIG,
@@ -40,20 +48,22 @@ class AudioRecorder(
             bufferSize
         )
 
-        if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
             logger.e("AudioRecorder", "AudioRecord failed to initialize")
+            isRecording.set(false)
             return@flow
         }
 
+        audioRecord = recorder
+
         try {
-            audioRecord.startRecording()
-            isRecording.set(true)
+            recorder.startRecording()
             logger.d("AudioRecorder", "Recording started")
 
             val buffer = ShortArray(MODEL_INPUT_SIZE)
 
             while (currentCoroutineContext().isActive && isRecording.get()) {
-                val readResult = audioRecord.read(buffer, 0, MODEL_INPUT_SIZE)
+                val readResult = recorder.read(buffer, 0, MODEL_INPUT_SIZE)
 
                 if (readResult > 0) {
                     // Check for silence/zeros to debug mic input
@@ -74,25 +84,39 @@ class AudioRecorder(
                     emit(floatBuffer)
                 } else {
                     logger.e("AudioRecorder", "Error reading audio: $readResult")
+                    break // Exit on read error
                 }
             }
         } catch (e: Exception) {
             logger.e("AudioRecorder", "Exception during recording", e)
         } finally {
-            try {
-                if (audioRecord.state == AudioRecord.STATE_INITIALIZED) {
-                    audioRecord.stop()
-                    audioRecord.release()
-                }
-            } catch (e: Exception) {
-                logger.e("AudioRecorder", "Error stopping recording", e)
-            }
-            isRecording.set(false)
-            logger.d("AudioRecorder", "Recording stopped")
+            cleanupRecorder()
         }
     }
 
     fun stopRecording() {
+        logger.d("AudioRecorder", "Stop recording requested")
         isRecording.set(false)
+    }
+
+    private fun cleanupRecorder() {
+        try {
+            val recorder = audioRecord
+            if (recorder != null) {
+                if (recorder.state == AudioRecord.STATE_INITIALIZED) {
+                    if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                        recorder.stop()
+                    }
+                    recorder.release()
+                    logger.d("AudioRecorder", "AudioRecord released")
+                }
+                audioRecord = null
+            }
+        } catch (e: Exception) {
+            logger.e("AudioRecorder", "Error cleaning up recorder", e)
+        } finally {
+            isRecording.set(false)
+            logger.d("AudioRecorder", "Recording stopped and cleaned up")
+        }
     }
 }

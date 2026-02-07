@@ -64,20 +64,26 @@ class RealMonitorRepository(
     }
 
     private fun startWork() {
-        // Enqueue as a long-running foreground service worker
+        // For continuous background monitoring, we use a long-running expedited worker
+        // with setExpedited to run as a foreground service
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiresBatteryNotLow(false) // Allow even on low battery
+            .build()
+            
         val request = androidx.work.OneTimeWorkRequestBuilder<org.override.sense.feature.monitor.work.MonitorWorker>()
+            .setConstraints(constraints)
             .addTag("monitor_worker")
             .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
             
-        // Use keep to avoid restarting if already running, BUT since we want a long running foreground service,
-        // we might want to ensure it's alive.
-        // Actually, for continuous monitoring, we should enqueue.
+        // KEEP policy will not restart if already running
         workManager.enqueueUniqueWork(
             "monitor_worker",
-            androidx.work.ExistingWorkPolicy.REPLACE,
+            androidx.work.ExistingWorkPolicy.KEEP,
             request
         )
+        
+        logger.d("RealMonitorRepository", "Started continuous monitoring work")
     }
 
     private fun stopWork() {
