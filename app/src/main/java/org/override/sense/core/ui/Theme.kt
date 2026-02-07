@@ -3,6 +3,7 @@ package org.override.sense.core.ui
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults.animationSpec
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -19,7 +20,7 @@ fun SenseTheme(
     content: @Composable () -> Unit
 ) {
     DynamicMaterialTheme(
-        seedColor = Color(0xFFEF6C00),
+        seedColor = Color(0xFFDAEDFF),
         content = {
             Surface(
                 contentColor = MaterialTheme.colorScheme.onBackground,
