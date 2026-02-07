@@ -1,5 +1,6 @@
 package org.override.sense.feature.monitor.data
 
+import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -14,10 +15,12 @@ import org.override.sense.feature.monitor.domain.SoundEvent
 import java.time.LocalDateTime
 import java.util.UUID
 
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.map
+
 class RealMonitorRepository(
-    private val audioRecorder: AudioRecorder,
-    private val soundClassifier: SoundClassifier,
-    private val vibrationManager: VibrationManager,
+    private val context: Context,
     private val logger: Logger
 ) : MonitorRepository {
 
@@ -30,56 +33,61 @@ class RealMonitorRepository(
     private val _history = MutableStateFlow<List<SoundEvent>>(emptyList())
     override val recentHistory: Flow<List<SoundEvent>> = _history
 
-    private var recordingJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
+    // We'll use WorkManager instead of direct coroutines
+    private val workManager = androidx.work.WorkManager.getInstance(context)
+
+    // DataStore for persistence
+    private val Context.dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> by androidx.datastore.preferences.preferencesDataStore(name = "monitor_prefs")
+    private val IS_SCANNING_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("is_scanning")
+
+    init {
+        // Restore state on init
+        val scope = CoroutineScope(Dispatchers.IO)
+        scope.launch {
+            context.dataStore.data.map { it[IS_SCANNING_KEY] ?: false }
+                .collect { savedIsScanning ->
+                    _isScanning.value = savedIsScanning
+                    if (savedIsScanning) {
+                        startWork()
+                    } else {
+                        stopWork()
+                    }
+                }
+        }
+    }
 
     override suspend fun setScanning(isScanning: Boolean) {
-        _isScanning.value = isScanning
-        if (isScanning) {
-            startMonitoring()
-        } else {
-            stopMonitoring()
+        context.dataStore.edit { prefs ->
+            prefs[IS_SCANNING_KEY] = isScanning
         }
+        // The collect block above will handle starting/stopping work
     }
 
-    private fun startMonitoring() {
-        if (recordingJob?.isActive == true) return
-
-        recordingJob = scope.launch {
-            logger.d("MonitorRepository", "Starting audio recording...")
-            audioRecorder.startRecording().collect { audioData ->
-                val results = soundClassifier.classify(audioData)
-                
-                    if (results.isNotEmpty()) {
-                        val bestMatch = results.first()
-                        
-                        if (bestMatch.score > 0.3f) { // Lowered to match classifier
-                            val event = SoundEvent(
-                                id = UUID.randomUUID().toString(),
-                                name = bestMatch.label,
-                                category = bestMatch.category,
-                                confidence = bestMatch.score,
-                                timestamp = LocalDateTime.now()
-                            )
-                            
-                            logger.i("MonitorRepository", "Sound detected: ${event.name} (${event.confidence})")
-                            
-                            // Trigger Haptic Feedback
-                            vibrationManager.vibrate(event.category)
-                            
-                            _detectedSounds.value = event
-                            updateHistory(event)
-                        }
-                    }
-            }
-        }
+    private fun startWork() {
+        // Enqueue as a long-running foreground service worker
+        val request = androidx.work.OneTimeWorkRequestBuilder<org.override.sense.feature.monitor.work.MonitorWorker>()
+            .addTag("monitor_worker")
+            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
+            
+        // Use keep to avoid restarting if already running, BUT since we want a long running foreground service,
+        // we might want to ensure it's alive.
+        // Actually, for continuous monitoring, we should enqueue.
+        workManager.enqueueUniqueWork(
+            "monitor_worker",
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            request
+        )
     }
 
-    private fun stopMonitoring() {
-        logger.d("MonitorRepository", "Stopping monitoring...")
-        audioRecorder.stopRecording()
-        recordingJob?.cancel()
-        recordingJob = null
+    private fun stopWork() {
+        workManager.cancelUniqueWork("monitor_worker")
+    }
+
+    // Called by Worker
+    fun emitEventFromWorker(event: SoundEvent) {
+        _detectedSounds.value = event
+        updateHistory(event)
     }
 
     private fun updateHistory(event: SoundEvent) {

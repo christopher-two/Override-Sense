@@ -11,12 +11,21 @@ import org.override.sense.feature.monitor.data.SoundClassifier
 import org.override.sense.feature.monitor.domain.MonitorRepository
 import org.override.sense.feature.monitor.presentation.MonitorViewModel
 
+import org.override.sense.core.common.notification.AppNotificationManager
+import org.override.sense.core.common.notification.SystemAppNotificationManager
+import org.override.sense.feature.monitor.work.MonitorWorker
+import org.koin.androidx.workmanager.dsl.worker
+
 val MonitorModule = module {
     singleOf(::AudioRecorder)
     single { SoundClassifier(androidContext()) }
+    single<AppNotificationManager> { SystemAppNotificationManager(androidContext()) }
     
-    singleOf(::RealMonitorRepository) bind MonitorRepository::class
+    single<MonitorRepository> { RealMonitorRepository(androidContext(), get()) }
     
     // ViewModel
     viewModelOf(::MonitorViewModel)
+    
+    // Worker
+    worker { MonitorWorker(get(), get()) }
 }
