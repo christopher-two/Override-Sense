@@ -20,7 +20,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.override.sense.core.ui.SenseTheme
 import org.override.sense.feature.settings.presentation.components.ColorSelector
 import org.override.sense.feature.settings.presentation.components.DeleteDataCard
-import org.override.sense.feature.settings.presentation.components.LanguageSelector
 import org.override.sense.feature.settings.presentation.components.ThemeSelector
 
 @Composable
@@ -85,18 +84,11 @@ fun SettingsScreen(
         }
 
         item {
-            LanguageSelector(
-                selectedLanguage = state.language,
-                onLanguageSelected = { onAction(SettingsAction.UpdateLanguage(it)) }
-            )
-        }
-
-        item {
             DeleteDataCard(
                 onClick = { showDeleteDialog = true }
             )
         }
-
+        
         item {
             Spacer(modifier = Modifier.height(60.dp))
         }

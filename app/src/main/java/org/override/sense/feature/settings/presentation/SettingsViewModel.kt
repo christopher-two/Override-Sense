@@ -29,7 +29,6 @@ class SettingsViewModel(
                 _state.update {
                     it.copy(
                         theme = settings.theme,
-                        language = settings.language,
                         color = settings.color,
                         isLoading = false
                     )
@@ -42,7 +41,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             when (action) {
                 is SettingsAction.UpdateTheme -> useCases.updateTheme(action.theme)
-                is SettingsAction.UpdateLanguage -> useCases.updateLanguage(action.language)
                 is SettingsAction.UpdateColor -> useCases.updateColor(action.color)
                 SettingsAction.ClearData -> useCases.clearData()
             }

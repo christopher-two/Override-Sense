@@ -87,6 +87,9 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     // Baseline Profile & Performance Optimizations
@@ -132,6 +135,13 @@ dependencies {
 
     // TensorFlowLite
     implementation(libs.tasks.genai)
+    implementation(libs.tensorflow.lite.support) {
+        exclude(group = "org.tensorflow", module = "tensorflow-lite-support-api")
+    }
+    implementation(libs.tensorflow.lite.metadata)
+    implementation(libs.tensorflow.lite) {
+        exclude(group = "org.tensorflow", module = "tensorflow-lite-api")
+    }
 
     // UI & Design System
     implementation(libs.coil.compose)

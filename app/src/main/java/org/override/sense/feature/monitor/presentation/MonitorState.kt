@@ -1,6 +1,9 @@
 package org.override.sense.feature.monitor.presentation
 
+import org.override.sense.feature.monitor.domain.SoundEvent
+
 data class MonitorState(
-    val paramOne: String = "default",
-    val paramTwo: List<String> = emptyList(),
+    val isScanning: Boolean = true,
+    val lastDetection: SoundEvent? = null,
+    val history: List<SoundEvent> = emptyList()
 )

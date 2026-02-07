@@ -11,9 +11,12 @@ import androidx.compose.runtime.snapshotFlow
 import org.override.sense.feature.navigation.controller.NavigationController
 import org.override.sense.feature.navigation.navigator.HomeNavigator
 
+import org.override.sense.feature.monitor.domain.MonitorRepository
+
 class HomeViewModel(
     private val navigationController: NavigationController,
-    private val homeNavigator: HomeNavigator
+    private val homeNavigator: HomeNavigator,
+    private val monitorRepository: MonitorRepository
 ) : ViewModel() {
 
     private var hasLoadedInitialData = false
@@ -23,6 +26,7 @@ class HomeViewModel(
         .onStart {
             if (!hasLoadedInitialData) {
                 observeTabChanges()
+                observeMonitoringState()
                 hasLoadedInitialData = true
             }
         }
@@ -31,6 +35,14 @@ class HomeViewModel(
             started = SharingStarted.WhileSubscribed(5_000L),
             initialValue = HomeState()
         )
+
+    private fun observeMonitoringState() {
+        viewModelScope.launch {
+            monitorRepository.isScanning.collect { isScanning ->
+                _state.value = _state.value.copy(isMonitoringActive = isScanning)
+            }
+        }
+    }
 
     private fun observeTabChanges() {
         viewModelScope.launch {
@@ -47,7 +59,10 @@ class HomeViewModel(
                 navigationController.switchTab(action.tab)
             }
             HomeAction.ToggleMonitoring -> {
-                _state.value = _state.value.copy(isMonitoringActive = !_state.value.isMonitoringActive)
+                viewModelScope.launch {
+                    val newState = !_state.value.isMonitoringActive
+                    monitorRepository.setScanning(newState)
+                }
             }
         }
     }

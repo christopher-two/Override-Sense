@@ -26,11 +26,7 @@ val ScreensModule: Module
         viewModelOf(::MainViewModel)
         viewModelOf(::OnboardingViewModel)
         viewModelOf(::HomeViewModel)
-        viewModelOf(::MonitorViewModel)
-        // SettingsViewModel is already in SettingsModule, but we can declare it here too or just rely on SettingsModule.
-        // Actually, viewModelOf needs to be where the ViewModel is defined or imported.
-        // Since I added SettingsModule to Application, SettingsViewModel is already provided.
-        // But for navigation DSL, I need to use it.
+        // MonitorViewModel and SettingsViewModel provided by feature modules
 
         navigation<RouteGlobal.Onboarding> {
             OnboardingRoot(koinViewModel())
