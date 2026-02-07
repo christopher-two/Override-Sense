@@ -4,6 +4,18 @@
 
 **Override Sense** es una aplicación de accesibilidad para Android diseñada para ayudar a personas con discapacidad auditiva. Utilizando inteligencia artificial en el dispositivo (On-Device AI), la app detecta, clasifica y visualiza sonidos ambientales críticos como alarmas de incendio, timbres o el llanto de un bebé, transformando el audio en alertas visuales y hápticas.
 
+## 📲 Descargar la App
+
+<p align="center">
+  <a href="https://pub-d9e5f32907414250918a7f45da3c437e.r2.dev/Sense.apk">
+    <img src="https://img.shields.io/badge/Descargar_APK-v1.0-brightgreen?style=for-the-badge&logo=android&logoColor=white" alt="Descargar APK">
+  </a>
+</p>
+
+**Requisitos:** Android 10 (API 29) o superior
+
+---
+
 ## ✨ Características Principales
 
 ### 🧠 Detección Inteligente
